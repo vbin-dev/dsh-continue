@@ -429,8 +429,15 @@ function settingsSchema(S) {
 // 0.1.7 loader 通过 entry.fiber.runtime.Config 自动发现 schema，必须在模块顶层导出。
 // schemastery <3.18.4 没有 .volatile()（独立安装场景）：降级为无 Config，
 // 设置写回不可用，但模块加载与插件运行不受影响。
-let Config = null
-try { Config = settingsSchema(Schema) } catch {}
+//
+// 降级时必须导出 undefined，绝不能导出 null：settingsSchema() 在 schemastery 不可用时
+// 返回 null，而宿主 @deepseek-ai/dsh-settings 的 SettingsForms#schema() 只排除了
+// undefined —— `schema !== void 0 && "toJSON" in schema`，于是 `"toJSON" in null` 抛
+// TypeError 并逃出 settings.describe()；describe() 既是设置读取接口、也是每次写入的内部
+// 步骤，整份设置文档（所有插件的命名空间）会随之失效：设置页全部读不出、写不进，桌面端
+// 引导进度无法持久化（每次启动都要求重新初始化，保存时报“未能保存设置，请重试”）。
+let Config
+try { Config = settingsSchema(Schema) || undefined } catch {}
 
 
 // 0.1.7 宿主 resolveConfig 会把 apply-config 里的 volatile 字段物化成 {}（实测）：
